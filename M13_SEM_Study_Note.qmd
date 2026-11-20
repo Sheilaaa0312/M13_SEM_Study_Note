@@ -51,8 +51,6 @@ Measurement model: Examines how observed indicators represent latent variables.
 
 Structural model: Examines regression relationships among variables, including relationships among latent factors.
 
-This distinction becomes especially important in Models 5 and 6 of the seminar.
-
 # Data and Software
 
 ## Required Package
@@ -245,7 +243,7 @@ A factor loading connects a latent factor to an indicator, while a regression co
 ## Other Important Terms
 
 | Term | Meaning |
-|------------------------------------|------------------------------------|
+|----|----|
 | Indicator | An observed variable used to measure a latent factor |
 | Factor | A latent variable represented by observed indicators |
 | Factor loading | The relationship between a factor and an indicator |
@@ -683,7 +681,7 @@ The proposed relationships still need theoretical justification.
 ## Comparing the Regression Models
 
 | Model | Endogenous Variables | Exogenous Variables | Regression Paths | Covariance / Residual Information | Free Parameters | df |
-|-----------|-----------|-----------|-----------|-----------|----------:|----------:|
+|----|----|----|----|----|---:|---:|
 | 1B | Reading | Motivation | Motivation -\> Reading | Reading residual variance; Motivation variance | 5 | 0 |
 | 2 | Reading | Motivation, Negative Parental Psychology | Both predictors -\> Reading | Predictor covariance; Reading residual variance | 9 | 0 |
 | 3A | Reading, Arithmetic | Motivation, Negative Parental Psychology | Both -\> Reading; Motivation -\> Arithmetic | Reading–Arithmetic residual covariance estimated | 8 | 1 |
@@ -2120,7 +2118,7 @@ UCLA Statistical Methods and Data Analytics. n.d. “Introduction to Structural 
 
 UCLA Statistical Methods and Data Analytics. 2021. “SEM Seminar R Code.” https://stats.oarc.ucla.edu/wp-content/uploads/2021/02/sem.r.
 
-# Appendix: Publication Links
+# Appendix
 
-- [GitHub Repository](PASTE_YOUR_GITHUB_REPOSITORY_LINK_HERE)
-- [GitHub Pages Website](PASTE_YOUR_GITHUB_PAGES_LINK_HERE)
+- [GitHub Repository](https://github.com/Sheilaaa0312/M13_SEM_Study_Note)
+- [GitHub Pages](https://sheilaaa0312.github.io/M13_SEM_Study_Note/M13_SEM_Study_Note.html)
