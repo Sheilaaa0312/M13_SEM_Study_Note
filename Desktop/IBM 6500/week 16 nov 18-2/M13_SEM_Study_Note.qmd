@@ -1,0 +1,2126 @@
+---
+title: "Structural Equation Modeling in R: Study Note"
+author: "Xueying Luo"
+date: today
+format:
+  html:
+    toc: true
+    toc-title: "Contents"
+    toc-depth: 3
+    number-sections: true
+    smooth-scroll: true
+    embed-resources: true
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+# Introduction
+
+## Purpose of the Assignment
+
+This study note follows the UCLA seminar *Introduction to Structural Equation Modeling (SEM) in R with lavaan*, presented by Johnny Lin. The seminar starts with simple regression and gradually introduces multiple regression, multivariate regression, path analysis, measurement models, and structural regression models.
+
+My goal is to understand how these models are connected, how to specify them in R, and how to interpret their results. I also want to understand what the model-fit statistics tell us and why certain model specifications produce different results, even when they use the same dataset.
+
+I follow the UCLA examples throughout the report and use the accompanying R code to reproduce the analyses. The seminar uses an illustrative, fictional dataset about student academic achievement. Although the data are not from an actual study, they provide a useful way to practice interpreting SEM models without having to introduce a different dataset for each analysis.
+
+## What Is Structural Equation Modeling?
+
+Structural equation modeling (SEM) is a statistical framework that allows researchers to examine multiple relationships within the same model. It includes several methods we may already be familiar with, such as linear regression and confirmatory factor analysis (CFA).
+
+The UCLA seminar describes SEM as an umbrella that includes:
+
+- Simple regression
+- Multiple regression
+- Multivariate regression
+- Path analysis
+- Confirmatory factor analysis
+- Structural regression
+
+What makes SEM particularly useful is that it can examine relationships involving both observed and latent variables.
+
+Observed variables are directly measured, such as Reading or Arithmetic scores. Latent variables represent concepts that cannot be measured directly, such as Adjustment or Achievement.
+
+For example, instead of treating Reading as the only measure of academic performance, the researcher can use Reading, Arithmetic, and Spelling to represent a broader latent construct called Achievement.
+
+SEM also combines two important parts:
+
+Measurement model: Examines how observed indicators represent latent variables.
+
+Structural model: Examines regression relationships among variables, including relationships among latent factors.
+
+This distinction becomes especially important in Models 5 and 6 of the seminar.
+
+# Data and Software
+
+## Required Package
+
+The UCLA seminar uses the `lavaan` package in R.
+
+The same package can estimate regression, path analysis, measurement models, and structural regression models, which makes it easier to see how these methods are related.
+
+```{r}
+library(lavaan)
+```
+
+## Importing the Data
+
+The UCLA example uses the `worland5.csv` dataset, containing 500 students and nine observed variables.
+
+```{r}
+dat <- read.csv("https://stats.idre.ucla.edu/wp-content/uploads/2021/02/worland5.csv")
+
+str(dat)
+head(dat)
+dim(dat)
+```
+
+The dataset includes the following variables.
+
+| Variable | Description                  | Proposed Latent Construct |
+|----------|------------------------------|---------------------------|
+| `motiv`  | Motivation                   | Adjustment                |
+| `harm`   | Harmony                      | Adjustment                |
+| `stabi`  | Stability                    | Adjustment                |
+| `ppsych` | Negative Parental Psychology | Risk                      |
+| `ses`    | Socioeconomic Status         | Risk                      |
+| `verbal` | Verbal IQ                    | Risk                      |
+| `read`   | Reading                      | Achievement               |
+| `arith`  | Arithmetic                   | Achievement               |
+| `spell`  | Spelling                     | Achievement               |
+
+The researcher proposes three latent constructs.
+
+Adjustment is measured by Motivation, Harmony, and Stability.
+
+Risk is measured by Negative Parental Psychology, Socioeconomic Status, and Verbal IQ.
+
+Achievement is measured by Reading, Arithmetic, and Spelling.
+
+The idea is to examine how students' background characteristics and adjustment are associated with academic achievement.
+
+These same variables are used throughout the seminar, but their relationships change depending on the model being tested.
+
+## Examining the Data
+
+The instructor emphasizes that covariance is one of the most important concepts in SEM.
+
+Before estimating the models, I calculated the covariance matrix.
+
+```{r}
+cov(dat)
+```
+
+The diagonal values represent the variance of each variable. In this dataset, the variances are approximately 100.
+
+The values outside the diagonal represent covariances between different variables.
+
+Some examples from the output are:
+
+| Variables                                   | Covariance |
+|---------------------------------------------|-----------:|
+| Motivation and Harmony                      |         77 |
+| Reading and Spelling                        |         87 |
+| Motivation and Negative Parental Psychology |        -25 |
+| Negative Parental Psychology and Reading    |        -39 |
+
+The covariance between Reading and Spelling is 87, suggesting that students who perform better in Reading also tend to perform better in Spelling.
+
+In comparison, Negative Parental Psychology and Reading have a covariance of -39. This indicates that higher Negative Parental Psychology scores tend to be associated with lower Reading scores.
+
+The negative covariance between Motivation and Negative Parental Psychology also suggests that students reporting more negative parental psychology tend to have lower Motivation scores.
+
+These are associations rather than evidence of cause and effect. However, they help explain why the researcher might include these variables in the same model.
+
+I also examined the correlation matrix.
+
+```{r}
+cor(dat)
+```
+
+The correlation matrix expresses these relationships on a standardized scale between -1 and 1.
+
+For example, Reading and Spelling have a correlation of approximately 0.87 because their covariance is 87 and both variables have a standard deviation of approximately 10.
+
+This indicates a strong positive relationship between the two academic measures.
+
+## Population, Sample, and Model-Implied Covariance
+
+The instructor introduces three covariance matrices that are important for understanding SEM.
+
+### Population Covariance Matrix
+
+The population covariance matrix is represented by $\Sigma$.
+
+It contains the actual variances and covariances in the population.
+
+In most research situations, we do not know the population covariance matrix because we only observe a sample.
+
+### Sample Covariance Matrix
+
+The sample covariance matrix is represented by $S$.
+
+It is calculated directly from the available data.
+
+In this assignment, `cov(dat)` produces $S$ using the 500 students in the dataset.
+
+Therefore, the output is an estimate of the population covariance matrix, not the population covariance matrix itself.
+
+### Model-Implied Covariance Matrix
+
+The model-implied covariance matrix is represented by $\Sigma(\theta)$.
+
+The symbol $\theta$ represents the parameters specified in the model, such as regression coefficients, factor loadings, and variances.
+
+The instructor explains that SEM attempts to reproduce the covariance structure using these estimated parameters.
+
+In the sample, we compare the observed covariance matrix $S$ with the estimated model-implied covariance matrix $\Sigma(\hat{\theta})$.
+
+The closer these two matrices are, the better the model reproduces the observed relationships.
+
+This helped me understand that SEM is not simply about finding significant regression coefficients. It also evaluates whether the proposed model can reasonably explain the covariance structure of the data.
+
+# Basic SEM Concepts
+
+## Observed and Latent Variables
+
+An observed variable is a variable that exists directly in the dataset.
+
+For example, `motiv`, `read`, and `arith` are observed variables because each student has a value for them.
+
+A latent variable represents a concept that is not directly observed.
+
+For example, Achievement is a latent variable because we do not have a single variable called Achievement in the dataset. Instead, the researcher proposes that Reading, Arithmetic, and Spelling measure it.
+
+This is one of the reasons measurement models are needed in SEM.
+
+## Exogenous and Endogenous Variables
+
+An exogenous variable is not predicted by another variable within the structural portion of the model.
+
+An endogenous variable is predicted by one or more variables.
+
+In simple regression, these correspond roughly to the independent and dependent variables.
+
+For example:
+
+`Motivation -> Reading`
+
+Motivation is exogenous because it predicts Reading.
+
+Reading is endogenous because it is the outcome being predicted.
+
+However, the instructor explains that these roles can change depending on the model.
+
+In Model 6A, Adjustment is an exogenous latent variable because it predicts Achievement.
+
+In Model 6B, Adjustment becomes endogenous because Risk predicts it.
+
+Therefore, whether a variable is exogenous or endogenous depends on the relationships specified in the model.
+
+## Measurement and Structural Models
+
+A measurement model describes the relationship between latent variables and their observed indicators.
+
+For example:
+
+`achieve =~ read + arith + spell`
+
+This specifies that Reading, Arithmetic, and Spelling are indicators of the latent factor Achievement.
+
+A structural model describes regression relationships.
+
+For example:
+
+`achieve ~ adjust + risk`
+
+This states that Adjustment and Risk predict Achievement.
+
+The distinction is important because a factor loading and a regression coefficient describe different relationships.
+
+A factor loading connects a latent factor to an indicator, while a regression coefficient connects a predictor to an outcome.
+
+## Other Important Terms
+
+| Term | Meaning |
+|------------------------------------|------------------------------------|
+| Indicator | An observed variable used to measure a latent factor |
+| Factor | A latent variable represented by observed indicators |
+| Factor loading | The relationship between a factor and an indicator |
+| Regression path | A relationship from a predictor to an outcome |
+| Residual | The part of a variable not explained by the specified model |
+| Intercept | The predicted outcome when the predictor values equal zero |
+| Variance | The variation within a variable |
+| Covariance | The relationship between the variation of two variables |
+
+## Understanding Path Diagrams
+
+The instructor uses path diagrams to explain SEM models visually.
+
+Path diagrams are especially helpful because they show the same relationships represented by matrix equations and `lavaan` syntax.
+
+| Symbol              | Meaning                           |
+|---------------------|-----------------------------------|
+| Rectangle           | Observed variable                 |
+| Oval                | Latent variable                   |
+| Triangle            | Intercept or mean                 |
+| Single-headed arrow | Regression path or factor loading |
+| Double-headed arrow | Variance or covariance            |
+
+For example, an arrow from Motivation to Reading represents a regression path.
+
+An arrow from Achievement to Reading represents a factor loading because Reading is an indicator of Achievement.
+
+A double-headed arrow between two variables represents covariance.
+
+When a double-headed arrow points back to the same variable, it represents variance.
+
+These symbols become useful when comparing the path-analysis and structural regression models later in the report.
+
+## Matrix Notation
+
+The seminar introduces matrix notation because SEM involves several equations that can be represented together.
+
+For multivariate regression:
+
+$$
+\mathbf{y} =
+\boldsymbol{\alpha} +
+\boldsymbol{\Gamma}\mathbf{x} +
+\boldsymbol{\zeta}
+$$
+
+Here:
+
+- $\mathbf{y}$ represents endogenous variables.
+- $\mathbf{x}$ represents exogenous variables.
+- $\boldsymbol{\alpha}$ represents intercepts.
+- $\boldsymbol{\Gamma}$ contains regression coefficients.
+- $\boldsymbol{\zeta}$ represents residuals.
+
+For models where endogenous variables also predict other endogenous variables, another matrix is introduced.
+
+$$
+\mathbf{y} =
+\boldsymbol{\alpha} +
+\boldsymbol{\Gamma}\mathbf{x} +
+\mathbf{B}\mathbf{y} +
+\boldsymbol{\zeta}
+$$
+
+The two matrices have different roles.
+
+Gamma ($\Gamma$) represents relationships from exogenous variables to endogenous variables.
+
+B ($B$) represents relationships among endogenous variables.
+
+For example, in path analysis, Motivation predicting Reading belongs to $\Gamma$.
+
+Reading predicting Arithmetic belongs to $B$ because both Reading and Arithmetic are endogenous variables.
+
+This distinction also appears in the structural regression model with two endogenous latent variables.
+
+# Basic lavaan Syntax
+
+The UCLA seminar introduces several operators that are used to write SEM models in R.
+
+| Operator | Meaning                  | Example                          |
+|----------|--------------------------|----------------------------------|
+| `~`      | Regression               | `read ~ motiv`                   |
+| `=~`     | Latent factor definition | `adjust =~ motiv + harm + stabi` |
+| `~~`     | Variance or covariance   | `ppsych ~~ motiv`                |
+| `~ 1`    | Intercept or mean        | `read ~ 1`                       |
+| `1*`     | Fixes a parameter at 1   | `risk =~ 1*verbal`               |
+| `0*`     | Fixes a parameter at 0   | `read ~~ 0*arith`                |
+| `NA*`    | Frees a parameter        | `risk =~ NA*verbal`              |
+| `a*`     | Labels a parameter       | `risk =~ a*verbal`               |
+
+The three operators I found most important are `~`, `=~`, and `~~`.
+
+The `~` operator specifies a regression relationship.
+
+The `=~` operator defines a latent factor using observed indicators.
+
+The `~~` operator specifies a variance or covariance.
+
+For example:
+
+`motiv ~~ motiv`
+
+represents the variance of Motivation.
+
+In comparison:
+
+`ppsych ~~ motiv`
+
+represents the covariance between Negative Parental Psychology and Motivation.
+
+The instructor also explains that `lavaan` estimates certain parameters by default, so not every parameter needs to be written explicitly in the model syntax.
+
+# Regression and Path Analysis
+
+## Model 1: Simple Regression
+
+### Model Specification
+
+The seminar begins with a simple regression where Motivation predicts Reading.
+
+The regression equation can be written as:
+
+$$
+read = \alpha + \gamma(motiv) + \zeta
+$$
+
+Here, $\alpha$ is the intercept, $\gamma$ is the regression coefficient, and $\zeta$ is the residual.
+
+I first reproduced this model using the `lm()` function.
+
+```{r}
+m1a <- lm(read ~ motiv, data = dat)
+
+fit1a <- summary(m1a)
+fit1a
+```
+
+Next, I estimated the same model using `lavaan`.
+
+```{r}
+m1b <- '
+  read ~ 1 + motiv
+  motiv ~~ motiv
+'
+
+fit1b <- sem(m1b, data = dat)
+
+summary(fit1b)
+```
+
+### Results and Interpretation
+
+Both methods report a regression coefficient of approximately 0.530 for Motivation.
+
+This means that a one-point increase in Motivation is associated with an estimated 0.53-point increase in Reading scores.
+
+The positive coefficient suggests that students with higher Motivation scores tend to perform better in Reading.
+
+The intercept is approximately zero because the variables in the UCLA dataset were centered around zero.
+
+The `lavaan` output also reports a Motivation variance of approximately 99.800 and a Reading residual variance of 71.766.
+
+The Reading residual variance represents the variation in Reading that remains after accounting for Motivation.
+
+### Least Squares and Maximum Likelihood
+
+Although the regression coefficients are approximately the same, the residual variances differ slightly.
+
+The instructor explains that this happens because `lm()` uses ordinary least squares, while `lavaan` uses maximum likelihood by default.
+
+The `lm()` output reports a residual standard error of 8.488.
+
+Squaring this gives a residual variance of approximately 72.04.
+
+The seminar demonstrates the conversion to the maximum-likelihood estimate.
+
+```{r}
+498 / 500 * fit1a$sigma^2
+```
+
+The result is approximately 71.766, matching the `lavaan` output.
+
+The difference comes from the denominator used when estimating residual variance.
+
+Ordinary least squares uses $N-k$, where $k$ includes the predictor and intercept, while the maximum-likelihood calculation uses $N$ in this example.
+
+This comparison helped me understand why two models can produce the same regression coefficients but slightly different variance estimates.
+
+### Model Identification
+
+Model 1 has zero degrees of freedom.
+
+This is a saturated model because it estimates enough parameters to reproduce the observed covariance information.
+
+The model chi-square is zero, but this does not mean that the theoretical relationship is necessarily correct.
+
+It means there are no remaining restrictions that can be tested through overall model fit.
+
+## Model 2: Multiple Regression
+
+### Model Specification
+
+Multiple regression includes more than one predictor but still has one outcome.
+
+In Model 2, Reading is predicted by Motivation and Negative Parental Psychology.
+
+```{r}
+m2 <- '
+  read ~ 1 + ppsych + motiv
+  ppsych ~~ motiv
+'
+
+fit2 <- sem(m2, data = dat)
+
+summary(fit2)
+```
+
+### Results and Interpretation
+
+The UCLA seminar reports the following coefficients.
+
+| Predictor                    | Coefficient |
+|------------------------------|------------:|
+| Negative Parental Psychology |      -0.275 |
+| Motivation                   |       0.461 |
+
+Both coefficients are statistically significant.
+
+The coefficient of -0.275 for Negative Parental Psychology means that, holding Motivation constant, a one-point increase in Negative Parental Psychology is associated with a 0.275-point decrease in Reading scores.
+
+Motivation has a positive coefficient of 0.461.
+
+Holding Negative Parental Psychology constant, a one-point increase in Motivation is associated with a 0.461-point increase in Reading.
+
+One result I noticed is that the Motivation coefficient decreased from 0.530 in Model 1 to 0.461 in Model 2.
+
+The difference occurs because Model 2 includes another predictor associated with both Motivation and Reading.
+
+Therefore, the coefficient now represents Motivation's relationship with Reading after accounting for Negative Parental Psychology.
+
+The covariance between the two predictors is approximately -24.950.
+
+This suggests that students with higher Negative Parental Psychology scores tend to report lower Motivation scores.
+
+The Reading residual variance also decreases from 71.766 in Model 1 to approximately 64.708 in Model 2.
+
+This indicates that including both predictors accounts for more of the variation in Reading than using Motivation alone.
+
+Model 2 is still saturated, with zero degrees of freedom.
+
+## Model 3A: Multivariate Regression
+
+### Model Specification
+
+The instructor emphasizes that multiple regression and multivariate regression are not the same.
+
+Multiple regression has one outcome and several predictors.
+
+Multivariate regression involves more than one outcome.
+
+In Model 3A, Reading is predicted by Negative Parental Psychology and Motivation, while Arithmetic is predicted by Motivation.
+
+```{r}
+m3a <- '
+  read ~ 1 + ppsych + motiv
+  arith ~ 1 + motiv
+'
+
+fit3a <- sem(m3a, data = dat)
+
+summary(fit3a)
+```
+
+### Results and Interpretation
+
+The UCLA output reports:
+
+| Relationship                             | Coefficient |
+|------------------------------------------|------------:|
+| Negative Parental Psychology -\> Reading |      -0.216 |
+| Motivation -\> Reading                   |       0.476 |
+| Motivation -\> Arithmetic                |       0.600 |
+
+Negative Parental Psychology is negatively associated with Reading, while Motivation is positively associated with both Reading and Arithmetic.
+
+For example, holding Negative Parental Psychology constant, a one-point increase in Motivation is associated with a 0.476-point increase in Reading.
+
+For Arithmetic, a one-point increase in Motivation is associated with a 0.600-point increase.
+
+The model also estimates a residual covariance of approximately 39.179 between Reading and Arithmetic.
+
+This is important because it shows that Reading and Arithmetic remain positively associated even after accounting for the predictors included in the model.
+
+The instructor explains that this residual covariance is one of the reasons a multivariate regression model can produce different coefficients from separate regressions.
+
+### Model Fit
+
+Model 3A reports:
+
+- Free parameters: 8
+- Degrees of freedom: 1
+- Chi-square: 6.796
+- p-value: 0.009
+
+Because the p-value is below 0.05, the chi-square test rejects exact model fit.
+
+This suggests that the model does not completely reproduce the observed covariance structure.
+
+The regression coefficients are still useful, but the significant chi-square tells us that some relationships may not be fully represented.
+
+## Model 3D: Removing the Residual Covariance
+
+### Model Specification
+
+The seminar next examines what happens when the residual covariance between Reading and Arithmetic is fixed at zero.
+
+```{r}
+m3d <- '
+  read ~ 1 + ppsych + motiv
+  arith ~ 1 + motiv
+  read ~~ 0*arith
+'
+
+fit3d <- sem(m3d, data = dat)
+
+summary(fit3d)
+```
+
+The statement `read ~~ 0*arith` fixes the residual covariance between the two outcomes at zero.
+
+To compare the results, the instructor also estimates the relationships using separate regressions.
+
+```{r}
+m3b <- lm(read ~ ppsych + motiv, data = dat)
+
+summary(m3b)
+
+m3c <- lm(arith ~ motiv, data = dat)
+
+summary(m3c)
+```
+
+### Comparing the Results
+
+After removing the residual covariance, the Reading coefficients become:
+
+- Negative Parental Psychology: -0.275
+- Motivation: 0.461
+
+These match the coefficients obtained from the separate regressions.
+
+This comparison shows that the different coefficients in Model 3A were not simply caused by rounding.
+
+The difference comes from how the model handles the residual covariance between Reading and Arithmetic.
+
+In Model 3A, that covariance was estimated.
+
+In Model 3D, it was fixed at zero.
+
+### Model Fit
+
+The UCLA seminar reports:
+
+| Statistic          | Model 3A | Model 3D |
+|--------------------|---------:|---------:|
+| Free parameters    |        8 |        7 |
+| Degrees of freedom |        1 |        2 |
+| Chi-square         |    6.796 |  234.960 |
+
+Model 3D fits substantially worse than Model 3A.
+
+The chi-square increases from 6.796 to 234.960 after removing the residual covariance.
+
+This is a large increase, suggesting that the relationship between Reading and Arithmetic cannot be adequately represented by the predictors alone.
+
+The remaining covariance between these outcomes matters.
+
+This example helped me understand why a simpler model is not always a better model. Removing a parameter may make a model more restrictive, but it can also prevent the model from representing an important relationship in the data.
+
+## Model 3E: Fully Saturated Multivariate Regression
+
+### Model Specification
+
+Model 3E adds Negative Parental Psychology as another predictor of Arithmetic.
+
+Now both Reading and Arithmetic are predicted by Motivation and Negative Parental Psychology.
+
+```{r}
+m3e <- '
+  read ~ 1 + ppsych + motiv
+  arith ~ 1 + ppsych + motiv
+'
+
+fit3e <- sem(m3e, data = dat)
+
+summary(fit3e)
+```
+
+### Results and Interpretation
+
+The UCLA output reports:
+
+| Relationship                                | Coefficient |
+|---------------------------------------------|------------:|
+| Negative Parental Psychology -\> Reading    |      -0.275 |
+| Motivation -\> Reading                      |       0.461 |
+| Negative Parental Psychology -\> Arithmetic |      -0.096 |
+| Motivation -\> Arithmetic                   |       0.576 |
+
+Negative Parental Psychology has negative relationships with both Reading and Arithmetic.
+
+However, its relationship with Arithmetic is smaller than its relationship with Reading.
+
+Holding Motivation constant, a one-point increase in Negative Parental Psychology is associated with a 0.096-point decrease in Arithmetic.
+
+Motivation remains positively associated with both academic outcomes.
+
+The model also estimates a residual covariance of approximately 38.651 between Reading and Arithmetic.
+
+### Model Identification
+
+Model 3E has nine free parameters and zero degrees of freedom.
+
+It is fully saturated.
+
+The model chi-square equals zero because the model can reproduce the observed covariance information exactly.
+
+However, the instructor emphasizes that this does not mean a saturated model is always the best model.
+
+It only means that enough parameters have been estimated to reproduce the sample covariance structure.
+
+The proposed relationships still need theoretical justification.
+
+## Comparing the Regression Models
+
+| Model | Endogenous Variables | Exogenous Variables | Regression Paths | Covariance / Residual Information | Free Parameters | df |
+|-----------|-----------|-----------|-----------|-----------|----------:|----------:|
+| 1B | Reading | Motivation | Motivation -\> Reading | Reading residual variance; Motivation variance | 5 | 0 |
+| 2 | Reading | Motivation, Negative Parental Psychology | Both predictors -\> Reading | Predictor covariance; Reading residual variance | 9 | 0 |
+| 3A | Reading, Arithmetic | Motivation, Negative Parental Psychology | Both -\> Reading; Motivation -\> Arithmetic | Reading–Arithmetic residual covariance estimated | 8 | 1 |
+| 3D | Reading, Arithmetic | Motivation, Negative Parental Psychology | Same as 3A | Reading–Arithmetic residual covariance fixed at zero | 7 | 2 |
+| 3E | Reading, Arithmetic | Motivation, Negative Parental Psychology | Both predictors -\> both outcomes | Outcome residual covariance estimated | 9 | 0 |
+
+The parameter counts follow the UCLA seminar specifications.
+
+Looking across these models, the main difference is not just the number of predictors. Adding outcomes, regression paths, or covariance restrictions changes how the model represents the observed relationships.
+
+Models 3A and 3D provide a particularly useful comparison because they show how changing one covariance restriction can substantially affect model fit.
+
+## Model 4A: Path Analysis
+
+### Model Specification
+
+Path analysis extends regression by allowing an endogenous variable to predict another endogenous variable.
+
+In Model 4A, Reading is predicted by Motivation and Negative Parental Psychology.
+
+Arithmetic is then predicted by Motivation and Reading.
+
+The proposed relationships are shown below.
+
+```{mermaid}
+flowchart LR
+    P["Negative Parental Psychology"] --> R["Reading"]
+    M["Motivation"] --> R
+    M --> A["Arithmetic"]
+    R --> A
+```
+
+Reading plays two roles in this model.
+
+It is an outcome of Motivation and Negative Parental Psychology, but it also predicts Arithmetic.
+
+```{r}
+m4a <- '
+  read ~ ppsych + motiv
+  arith ~ motiv + read
+'
+
+fit4a <- sem(m4a, data = dat)
+
+summary(fit4a, fit.measures = TRUE)
+```
+
+### Results and Interpretation
+
+The UCLA seminar reports:
+
+| Relationship                             | Coefficient |
+|------------------------------------------|------------:|
+| Negative Parental Psychology -\> Reading |      -0.275 |
+| Motivation -\> Reading                   |       0.461 |
+| Motivation -\> Arithmetic                |       0.296 |
+| Reading -\> Arithmetic                   |       0.573 |
+
+The coefficient from Reading to Arithmetic is 0.573.
+
+This suggests that students with higher Reading scores also tend to have higher Arithmetic scores, even after accounting for Motivation.
+
+The instructor gives a possible explanation: Reading ability may help students understand mathematical word problems.
+
+This provides a reasonable justification for including Reading as a predictor of Arithmetic, although the model does not establish a causal relationship.
+
+The coefficient for Motivation predicting Arithmetic is 0.296.
+
+In Model 3A, the coefficient was 0.600.
+
+The coefficient becomes smaller after Reading is included as another predictor of Arithmetic.
+
+This suggests that part of the relationship between Motivation and Arithmetic may be represented through Reading.
+
+### Direct and Indirect Relationships
+
+Path analysis allows us to distinguish between direct and indirect relationships.
+
+The direct relationship from Motivation to Arithmetic is:
+
+$$
+0.296
+$$
+
+There is also a possible indirect relationship through Reading:
+
+$$
+Motivation \rightarrow Reading \rightarrow Arithmetic
+$$
+
+The indirect coefficient is calculated by multiplying the relevant regression coefficients.
+
+$$
+0.461 \times 0.573 \approx 0.264
+$$
+
+The model-implied total relationship is approximately:
+
+$$
+0.296 + 0.264 = 0.560
+$$
+
+This suggests that Motivation is associated with Arithmetic both directly and indirectly through Reading in the proposed model.
+
+However, because these are observational relationships in an illustrative dataset, the indirect association should not be interpreted as proof of causation.
+
+### Model Fit
+
+Model 4A reports:
+
+- Free parameters: 8
+- Degrees of freedom: 1
+- Chi-square: 4.870
+- p-value: 0.027
+
+The significant chi-square suggests that Model 4A does not achieve exact fit.
+
+The instructor then examines additional fit statistics to evaluate whether the model still provides a reasonable approximation of the observed relationships.
+
+# Model-Fit Statistics
+
+## Understanding Model Fit
+
+Model fit tells us how closely the covariance structure reproduced by the model matches the observed covariance structure.
+
+The instructor explains that a model can have statistically significant regression coefficients but still have problems with overall fit.
+
+Therefore, the statistical significance of individual paths is not enough to decide whether an SEM model fits well.
+
+## Model Chi-Square
+
+The model chi-square tests whether the model-implied covariance matrix differs from the population covariance matrix.
+
+The null hypothesis assumes exact fit.
+
+For Model 4A, the chi-square statistic is 4.870 with one degree of freedom.
+
+The UCLA seminar calculates its p-value using:
+
+```{r}
+pchisq(q = 4.870, df = 1, lower.tail = FALSE)
+```
+
+The result is approximately 0.027.
+
+Since the p-value is below 0.05, we reject the null hypothesis of exact fit.
+
+However, the instructor explains that chi-square is sensitive to sample size.
+
+With 500 observations, even relatively small differences between the observed and model-implied covariance matrices may produce a significant result.
+
+Therefore, I would not evaluate Model 4A using the chi-square test alone.
+
+## Baseline Model
+
+A baseline model provides a comparison for evaluating model fit.
+
+The UCLA seminar demonstrates a variance-only model.
+
+```{r}
+m4c <- '
+  read ~~ read
+  ppsych ~~ ppsych
+  motiv ~~ motiv
+  arith ~~ arith
+'
+
+fit4c <- sem(m4c, data = dat)
+
+summary(fit4c, fit.measures = TRUE)
+```
+
+For this stand-alone variance-only model, the UCLA seminar reports a chi-square of 707.017 with six degrees of freedom.
+
+In comparison, the baseline model reported within the Model 4A fit output has a chi-square of 674.748 with five degrees of freedom.
+
+These are different baseline specifications in the seminar output, so they should not be treated as identical results.
+
+For interpreting the CFI and TLI of Model 4A, I use the baseline statistics reported with `fit4a`.
+
+The important point is that Model 4A fits much better than the corresponding baseline model.
+
+## Comparative Fit Index (CFI)
+
+CFI compares the proposed model with a baseline model.
+
+A value closer to 1 indicates better fit relative to that baseline model.
+
+For Model 4A:
+
+$$
+CFI = 0.994
+$$
+
+This value is very high.
+
+It suggests that Model 4A reproduces the observed covariance relationships much better than the baseline model.
+
+Even though the chi-square test rejects exact fit, CFI provides evidence that the model captures the relationships reasonably well.
+
+## Tucker-Lewis Index (TLI)
+
+TLI also compares the proposed model with a baseline model, while accounting for degrees of freedom.
+
+For Model 4A:
+
+$$
+TLI = 0.971
+$$
+
+This is also relatively high and supports the model's approximate fit.
+
+The instructor explains that CFI and TLI are closely related, but TLI considers model complexity differently.
+
+Both statistics suggest that Model 4A performs substantially better than the baseline model.
+
+## Root Mean Square Error of Approximation (RMSEA)
+
+RMSEA evaluates approximate model misfit while accounting for degrees of freedom.
+
+The UCLA seminar provides the following guidelines.
+
+| RMSEA              | Interpretation             |
+|--------------------|----------------------------|
+| 0.05 or lower      | Close fit                  |
+| Above 0.05 to 0.08 | Reasonable approximate fit |
+| 0.10 or higher     | Poor fit                   |
+
+For Model 4A:
+
+$$
+RMSEA = 0.088
+$$
+
+This is slightly above the commonly used 0.08 guideline.
+
+The UCLA output reports a 90% confidence interval from 0.024 to 0.172.
+
+The interval is quite wide, meaning the RMSEA estimate is not very precise.
+
+This is especially important because Model 4A has only one degree of freedom.
+
+Therefore, I would be cautious about treating RMSEA alone as evidence that the model has poor fit.
+
+## Overall Model-Fit Interpretation
+
+The UCLA seminar reports the following results for Model 4A.
+
+| Statistic          |      Result |
+|--------------------|------------:|
+| Chi-square         |       4.870 |
+| Degrees of freedom |           1 |
+| p-value            |       0.027 |
+| CFI                |       0.994 |
+| TLI                |       0.971 |
+| RMSEA              |       0.088 |
+| RMSEA 90% CI       | 0.024–0.172 |
+| SRMR               |       0.015 |
+
+The fit statistics provide somewhat different conclusions.
+
+The significant chi-square suggests that the model does not reproduce the covariance structure perfectly.
+
+However, CFI and TLI are very high, and SRMR is low.
+
+These results indicate that the model captures the observed relationships reasonably well.
+
+RMSEA is somewhat higher than the preferred range, but its confidence interval is wide.
+
+Considering the results together, I would describe Model 4A as having reasonable but imperfect fit.
+
+This is consistent with the UCLA seminar's conclusion that the model provides a reasonable approximation, even though there is some evidence of misfit.
+
+## Model Identification and Degrees of Freedom
+
+The seminar explains that degrees of freedom depend on the amount of information available and the number of free parameters estimated.
+
+For a covariance matrix containing $p$ observed variables, the number of unique variance and covariance elements is:
+
+$$
+\frac{p(p+1)}{2}
+$$
+
+When means are included, the relevant mean and intercept parameters must also be considered.
+
+### Saturated or Just-Identified Models
+
+A saturated model has zero degrees of freedom.
+
+It estimates enough parameters to reproduce the observed covariance information.
+
+Models 1, 2, and 3E are examples.
+
+However, because the model is saturated, its overall lack of fit cannot be meaningfully tested.
+
+### Over-Identified Models
+
+An over-identified model has positive degrees of freedom.
+
+This means that the model imposes restrictions that can be tested.
+
+Models 3A, 3D, and 4A are examples.
+
+The advantage is that researchers can evaluate whether the restrictions are consistent with the observed data.
+
+### Under-Identified Models
+
+An under-identified model does not provide enough independent information to estimate all parameters uniquely.
+
+Negative degrees of freedom are one warning sign of under-identification.
+
+The researcher may need to fix certain parameters or change the model specification.
+
+The seminar also introduces two ways to establish the scale of a latent factor.
+
+The first is the marker method, which fixes one factor loading to 1.
+
+The second fixes the factor variance to 1.
+
+The marker method is commonly used by default in `lavaan`.
+
+# Modification Indices
+
+## What Is a Modification Index?
+
+A modification index (MI) estimates how much the model chi-square could decrease if one omitted or fixed parameter were freely estimated.
+
+The UCLA seminar uses modification indices to examine Model 4A.
+
+```{r}
+modindices(fit4a, sort = TRUE)
+```
+
+The `sort = TRUE` option displays the largest modification indices first.
+
+The output also includes the expected parameter change (EPC), which estimates the value of the parameter if it were added to the model.
+
+Each modification index evaluates freeing one parameter, so it represents a one-degree-of-freedom comparison.
+
+## Interpreting the Modification Indices
+
+The UCLA seminar reports two notable suggestions.
+
+| Suggested Relationship                               |     MI |   EPC |
+|------------------------------------------------------|-------:|------:|
+| Motivation predicted by Arithmetic                   | 68.073 | 8.874 |
+| Arithmetic predicted by Negative Parental Psychology |  4.847 | 0.068 |
+
+The largest MI suggests predicting Motivation from Arithmetic.
+
+However, this does not match the researcher's original explanation of the relationships.
+
+It would also change Motivation from an exogenous variable to an endogenous variable.
+
+The instructor points out that simply choosing the largest MI is not always appropriate.
+
+In addition, the suggested MI is larger than the original model chi-square, so the approximation should not be treated as an exact improvement.
+
+The second suggestion is to add Negative Parental Psychology as a predictor of Arithmetic.
+
+This is more consistent with the original model because Negative Parental Psychology is already used to predict Reading.
+
+It may also be associated with Arithmetic performance.
+
+Therefore, the researcher considers this additional path.
+
+## Model 4B: Modified Path Analysis
+
+Model 4B adds Negative Parental Psychology as a predictor of Arithmetic.
+
+```{r}
+m4b <- '
+  read ~ ppsych + motiv
+  arith ~ motiv + read + ppsych
+'
+
+fit4b <- sem(m4b, data = dat)
+
+summary(fit4b, fit.measures = TRUE)
+```
+
+The added coefficient is approximately 0.068.
+
+The model's degrees of freedom decrease from 1 to 0.
+
+Model 4B is now saturated, and its chi-square equals zero.
+
+However, this does not prove that the added relationship is theoretically correct.
+
+It only means that the additional parameter allows the model to reproduce the sample covariance structure.
+
+The instructor also explains that modification indices are approximations. Their expected improvement may be close to, but not exactly equal to, the change observed when the model is re-estimated.
+
+The main lesson is that modification indices should be treated as diagnostic information.
+
+Researchers should not add paths simply to improve fit statistics because this may lead to overfitting and results that do not replicate in another sample.
+
+# Measurement Model
+
+## Understanding Measurement Models
+
+The regression models discussed earlier use observed variables.
+
+A measurement model instead examines how observed variables represent latent factors.
+
+The main parameters of interest are factor loadings.
+
+A factor loading describes how strongly an observed indicator is associated with the factor it measures.
+
+The UCLA seminar first examines a one-factor measurement model before introducing a model containing all three latent constructs.
+
+## Model 5A: One-Factor Measurement Model
+
+### Model Specification
+
+Model 5A examines the Risk factor using three observed indicators:
+
+- Verbal IQ
+- Socioeconomic Status
+- Negative Parental Psychology
+
+```{r}
+m5a <- '
+  risk =~ verbal + ses + ppsych
+  verbal ~ 1
+  ses ~ 1
+  ppsych ~ 1
+'
+
+fit5a <- sem(m5a, data = dat)
+
+summary(fit5a, standardized = TRUE, fit.measures = TRUE)
+```
+
+The `=~` operator defines the latent factor.
+
+The `~ 1` statements specify the indicator intercepts.
+
+### Factor Loading Interpretation
+
+The UCLA seminar reports the following standardized loadings.
+
+| Indicator                    | Standardized Loading |
+|------------------------------|---------------------:|
+| Verbal IQ                    |                0.617 |
+| Socioeconomic Status         |                0.648 |
+| Negative Parental Psychology |               -0.648 |
+
+Verbal IQ and Socioeconomic Status are positively associated with the factor.
+
+Negative Parental Psychology has a negative loading.
+
+This is an important detail because the factor is named Risk.
+
+Based on the loading directions, higher scores on the estimated factor are associated with higher Verbal IQ, higher Socioeconomic Status, and lower Negative Parental Psychology.
+
+Therefore, it would be misleading to interpret a higher score on this factor as automatically representing more negative family risk.
+
+The factor's measurement direction needs to be considered when interpreting the structural regression results.
+
+### Residual Variances and Identification
+
+The residual variance represents the part of each indicator that the latent factor does not explain.
+
+For example, the UCLA output reports a residual variance of approximately 61.781 for Verbal IQ.
+
+This means the latent Risk factor does not account for all variation in Verbal IQ.
+
+Model 5A has zero degrees of freedom.
+
+The three-indicator, one-factor model is just-identified under this specification.
+
+Although the factor loadings can be interpreted, the model's overall fit cannot be independently tested.
+
+This is another example of why a zero chi-square does not automatically indicate a strong measurement model.
+
+## Three-Factor Measurement Model
+
+### Model Specification
+
+The assignment also requires a measurement model with all three proposed latent constructs.
+
+```{r}
+measurement_model <- '
+  adjust  =~ motiv + harm + stabi
+  risk    =~ verbal + ppsych + ses
+  achieve =~ read + arith + spell
+'
+
+fit_measurement <- cfa(
+  measurement_model,
+  data = dat
+)
+
+summary(
+  fit_measurement,
+  fit.measures = TRUE,
+  standardized = TRUE
+)
+```
+
+The three-factor model can be represented by the following measurement diagram.
+
+```{mermaid}
+flowchart LR
+    AD((Adjustment)) --> M["Motivation"]
+    AD --> H["Harmony"]
+    AD --> S["Stability"]
+
+    RI((Risk)) --> V["Verbal IQ"]
+    RI --> SE["Socioeconomic Status"]
+    RI --> P["Negative Parental Psychology"]
+
+    AC((Achievement)) --> RE["Reading"]
+    AC --> AR["Arithmetic"]
+    AC --> SP["Spelling"]
+```
+
+Each oval represents a latent factor, and each rectangle represents an observed indicator.
+
+The arrows from the factors to their indicators represent factor loadings.
+
+The model also allows the three latent factors to covary, although those covariance paths are not shown in this simplified diagram.
+
+### Factor Loading Interpretation
+
+The standardized factor loadings help us understand how strongly each indicator measures its factor.
+
+For Achievement, the UCLA seminar reports:
+
+| Indicator  | Standardized Loading |
+|------------|---------------------:|
+| Reading    |                0.941 |
+| Arithmetic |                0.788 |
+| Spelling   |                0.919 |
+
+Reading and Spelling have particularly strong relationships with Achievement.
+
+Arithmetic also has a substantial positive loading, although it is somewhat smaller.
+
+This suggests that all three indicators contribute to the measurement of Achievement, but they are not equally strong.
+
+For Adjustment, the standardized loadings are approximately:
+
+| Indicator  | Standardized Loading |
+|------------|---------------------:|
+| Motivation |                0.933 |
+| Harmony    |                0.825 |
+| Stability  |                0.648 |
+
+Motivation is the strongest indicator of Adjustment, followed by Harmony.
+
+Stability still has a positive loading, but its relationship with the factor is weaker.
+
+For Risk, the three-factor model reports approximately:
+
+| Indicator                    | Standardized Loading |
+|------------------------------|---------------------:|
+| Verbal IQ                    |                0.733 |
+| Negative Parental Psychology |               -0.564 |
+| Socioeconomic Status         |                0.591 |
+
+These values differ from the one-factor Model 5A because the larger model estimates Risk together with Adjustment and Achievement.
+
+The negative loading of Negative Parental Psychology remains important for interpreting what the Risk factor represents.
+
+### Measurement Model Fit
+
+The three-factor measurement model allows the latent factors to covary.
+
+This produces a covariance structure equivalent to the structural regression specification in Model 6A, where Adjustment and Risk predict Achievement and are allowed to covary.
+
+The corresponding UCLA fit statistics are:
+
+| Statistic          |      Result |
+|--------------------|------------:|
+| Chi-square         |     148.982 |
+| Degrees of freedom |          24 |
+| p-value            |    \< 0.001 |
+| CFI                |       0.951 |
+| TLI                |       0.927 |
+| RMSEA              |       0.102 |
+| RMSEA 90% CI       | 0.087–0.118 |
+| SRMR               |       0.041 |
+
+The results are mixed.
+
+CFI is slightly above 0.95, while TLI is somewhat lower.
+
+RMSEA is 0.102, which exceeds the seminar's guideline for reasonable approximate fit.
+
+The chi-square test is also statistically significant.
+
+This suggests that the measurement model does not reproduce all the observed covariance relationships particularly well.
+
+At the same time, several factor loadings are strong, especially those measuring Achievement.
+
+Therefore, I would not conclude that the measurement model is completely unsuccessful, but I would also avoid describing its overall fit as excellent.
+
+The important distinction is that strong factor loadings do not necessarily mean the entire measurement model fits the data well.
+
+# Structural Regression Models
+
+## Understanding Structural Regression
+
+A structural regression model combines measurement relationships and regression paths among latent variables.
+
+This is where SEM extends beyond the earlier regression and path-analysis examples.
+
+Instead of predicting Reading or Arithmetic directly, the researcher examines relationships involving broader constructs such as Adjustment, Risk, and Achievement.
+
+The model first defines these constructs through their observed indicators.
+
+Then it estimates the structural relationships among them.
+
+## Model 6A: One Endogenous Latent Variable
+
+### Model Specification
+
+Model 6A proposes that Adjustment and Risk predict Achievement.
+
+Adjustment and Risk are exogenous latent variables.
+
+Achievement is the endogenous latent variable.
+
+```{r}
+m6a <- '
+  adjust  =~ motiv + harm + stabi
+  risk    =~ verbal + ppsych + ses
+  achieve =~ read + arith + spell
+
+  achieve ~ adjust + risk
+'
+
+fit6a <- sem(m6a, data = dat)
+
+summary(
+  fit6a,
+  standardized = TRUE,
+  fit.measures = TRUE
+)
+```
+
+The first three lines define the measurement relationships.
+
+The final line specifies that Achievement is predicted by Adjustment and Risk.
+
+### Structural Regression Results
+
+The UCLA seminar reports:
+
+| Relationship               | Unstandardized | Standardized |
+|----------------------------|---------------:|-------------:|
+| Adjustment -\> Achievement |          0.375 |        0.372 |
+| Risk -\> Achievement       |          0.724 |        0.564 |
+
+Both paths are positive and statistically significant.
+
+The standardized coefficient from Adjustment to Achievement is 0.372.
+
+Holding Risk constant, a one-standard-deviation increase in Adjustment is associated with an estimated 0.372-standard-deviation increase in Achievement.
+
+This suggests that students with higher Adjustment scores tend to have higher Achievement scores.
+
+The standardized coefficient from Risk to Achievement is 0.564.
+
+This is larger than the standardized coefficient for Adjustment.
+
+However, interpreting this coefficient requires looking at the measurement model.
+
+The factor named Risk has positive loadings for Verbal IQ and Socioeconomic Status and a negative loading for Negative Parental Psychology.
+
+Therefore, higher scores on the estimated Risk factor reflect a combination of higher Verbal IQ, higher Socioeconomic Status, and lower Negative Parental Psychology.
+
+The positive coefficient should not be interpreted as evidence that more negative family risk improves achievement.
+
+Instead, it indicates a positive relationship between Achievement and the Risk factor as it is measured in this model.
+
+### Covariance Between Adjustment and Risk
+
+The standardized covariance between Adjustment and Risk is approximately 0.470.
+
+This indicates a moderate positive relationship between the two factors.
+
+Students with higher Adjustment scores tend to have higher scores on the coded Risk factor.
+
+This also means the two predictors are not completely independent of one another.
+
+The structural regression estimates each factor's relationship with Achievement while accounting for the other factor.
+
+### Residual Variance
+
+The UCLA output reports an unstandardized residual variance of approximately 30.685 for Achievement.
+
+Its standardized residual variance is approximately 0.347.
+
+This means that about 34.7% of the standardized variation in Achievement remains unexplained by Adjustment and Risk.
+
+The model accounts for the remaining approximately 65.3% of the variation.
+
+This suggests that the two factors explain a substantial part of Achievement in the illustrative dataset, although other influences may still be missing.
+
+### Overall Model Fit
+
+The UCLA seminar reports:
+
+| Statistic          |      Result |
+|--------------------|------------:|
+| Chi-square         |     148.982 |
+| Degrees of freedom |          24 |
+| p-value            |    \< 0.001 |
+| CFI                |       0.951 |
+| TLI                |       0.927 |
+| RMSEA              |       0.102 |
+| RMSEA 90% CI       | 0.087–0.118 |
+| SRMR               |       0.041 |
+
+The model has statistically significant structural paths, but the overall fit statistics are not equally strong.
+
+CFI is slightly above 0.95, and SRMR is relatively low.
+
+These values suggest that the model captures important relationships in the data.
+
+However, the significant chi-square indicates that the model does not achieve exact fit.
+
+RMSEA is also 0.102, exceeding the seminar's guideline for reasonable approximate fit.
+
+TLI is lower than CFI.
+
+Considering all these results, I would describe Model 6A as having mixed overall fit.
+
+The regression paths provide useful information about the relationships among the latent constructs, but the model does not fully reproduce the observed covariance structure.
+
+This shows why it is important to evaluate overall model fit separately from the significance of individual regression coefficients.
+
+## Model 6B: Two Endogenous Latent Variables
+
+### Model Specification
+
+Model 6B changes the structural relationships.
+
+Instead of treating Adjustment and Risk as two exogenous predictors, the researcher proposes that Risk also predicts Adjustment.
+
+The model includes three structural paths:
+
+- Risk -\> Adjustment
+- Risk -\> Achievement
+- Adjustment -\> Achievement
+
+Risk is now the only exogenous latent factor.
+
+Adjustment and Achievement are both endogenous latent factors.
+
+The structural relationships can be illustrated as follows.
+
+```{mermaid}
+flowchart LR
+    R((Risk)) --> A((Adjustment))
+    R --> AC((Achievement))
+    A --> AC
+```
+
+```{r}
+m6b <- '
+  adjust  =~ motiv + harm + stabi
+  risk    =~ verbal + ses + ppsych
+  achieve =~ read + arith + spell
+
+  adjust ~ risk
+  achieve ~ adjust + risk
+'
+
+fit6b <- sem(m6b, data = dat)
+
+summary(
+  fit6b,
+  standardized = TRUE,
+  fit.measures = TRUE
+)
+```
+
+### Structural Regression Results
+
+The UCLA seminar reports:
+
+| Relationship               | Standardized Coefficient |
+|----------------------------|-------------------------:|
+| Risk -\> Adjustment        |                    0.470 |
+| Adjustment -\> Achievement |                    0.372 |
+| Risk -\> Achievement       |                    0.564 |
+
+Risk has a positive relationship with Adjustment.
+
+The standardized coefficient of 0.470 means that a one-standard-deviation increase in the coded Risk factor is associated with an estimated 0.470-standard-deviation increase in Adjustment.
+
+Adjustment also has a positive relationship with Achievement, with a standardized coefficient of 0.372.
+
+Risk continues to have a direct positive relationship with Achievement, with a standardized coefficient of 0.564.
+
+The interpretation of Risk still depends on the direction of its factor loadings.
+
+### Direct and Indirect Effects
+
+Model 6B includes a possible indirect relationship from Risk to Achievement through Adjustment.
+
+$$
+Risk \rightarrow Adjustment \rightarrow Achievement
+$$
+
+Using the standardized coefficients:
+
+$$
+0.470 \times 0.372 \approx 0.175
+$$
+
+This is the estimated standardized indirect relationship.
+
+The direct standardized coefficient from Risk to Achievement is 0.564.
+
+Adding the indirect component gives an approximate total standardized relationship:
+
+$$
+0.564 + 0.175 = 0.739
+$$
+
+This means that Risk is associated with Achievement both directly and through Adjustment in the proposed model.
+
+However, the indirect relationship should not automatically be interpreted as causal mediation.
+
+The data and model specification alone do not establish the direction of causality.
+
+### Gamma and B Matrices
+
+Model 6B also helps explain the difference between the $\Gamma$ and $B$ matrices.
+
+$\Gamma$ represents paths from exogenous latent variables to endogenous latent variables.
+
+In this model:
+
+- Risk -\> Adjustment
+- Risk -\> Achievement
+
+These relationships belong to $\Gamma$.
+
+$B$ represents relationships among endogenous latent variables.
+
+Therefore:
+
+- Adjustment -\> Achievement
+
+belongs to $B$.
+
+The difference matters because Adjustment is now both an outcome of Risk and a predictor of Achievement.
+
+### Comparing Models 6A and 6B
+
+An interesting result from the UCLA seminar is that Models 6A and 6B have the same overall fit.
+
+Both models report:
+
+| Statistic          | Model 6A | Model 6B |
+|--------------------|---------:|---------:|
+| Chi-square         |  148.982 |  148.982 |
+| Degrees of freedom |       24 |       24 |
+| CFI                |    0.951 |    0.951 |
+| TLI                |    0.927 |    0.927 |
+| RMSEA              |    0.102 |    0.102 |
+
+Even though Model 6B introduces a regression path from Risk to Adjustment, the overall fit does not improve.
+
+The reason is that the two models represent the same covariance relationships among the three latent factors using different structural specifications.
+
+In Model 6A, Adjustment and Risk are allowed to covary.
+
+In Model 6B, this relationship is represented through a regression path from Risk to Adjustment.
+
+The models can therefore reproduce the same observed covariance information.
+
+This is an important lesson because changing the structural paths does not necessarily improve overall fit.
+
+It also shows that fit statistics alone cannot determine which theoretical explanation is correct.
+
+The researcher still needs a reasonable theoretical justification for the proposed direction of the relationships.
+
+# Practice Questions and Answers
+
+## 1. What is structural equation modeling?
+
+Structural equation modeling is a statistical framework used to examine multiple relationships among observed and latent variables.
+
+It includes methods such as regression, path analysis, CFA, and structural regression.
+
+The UCLA seminar explains that SEM attempts to reproduce the observed covariance structure using parameters specified in a model.
+
+For example, SEM allows the researcher to examine how Adjustment and Risk are associated with Achievement while also estimating how the observed variables measure these constructs.
+
+## 2. Which statistical models can be treated as special cases of SEM?
+
+Simple regression, multiple regression, multivariate regression, path analysis, CFA, and structural regression are all special cases of SEM.
+
+The UCLA seminar demonstrates this progression through Models 1 to 6.
+
+The main differences involve the number of outcomes, the relationships among variables, and whether latent factors are included.
+
+## 3. What is the difference between an observed variable and a latent variable?
+
+An observed variable is directly measured and appears in the dataset.
+
+For example, Reading is observed because each student has a Reading score.
+
+A latent variable represents a concept that cannot be measured directly.
+
+Achievement is a latent variable measured by Reading, Arithmetic, and Spelling.
+
+## 4. What is the difference between an exogenous variable and an endogenous variable?
+
+An exogenous variable is not predicted by another variable within the structural model.
+
+An endogenous variable has at least one incoming regression path.
+
+For example, Adjustment is exogenous in Model 6A because it predicts Achievement.
+
+In Model 6B, Adjustment becomes endogenous because Risk predicts it.
+
+The classification therefore depends on the model being estimated.
+
+## 5. What is the difference between a measurement model and a structural model?
+
+A measurement model describes how observed indicators represent latent constructs.
+
+For example:
+
+`achieve =~ read + arith + spell`
+
+A structural model describes regression relationships among variables or latent factors.
+
+For example:
+
+`achieve ~ adjust + risk`
+
+The measurement model focuses on how the constructs are measured, while the structural model focuses on relationships among them.
+
+## 6. What does the `~` operator mean in lavaan?
+
+The `~` operator specifies a regression relationship.
+
+The variable on the left is the outcome, and the variables on the right are predictors.
+
+For example, `read ~ motiv` estimates the relationship between Motivation and Reading.
+
+## 7. What does the `=~` operator mean?
+
+The `=~` operator defines a latent factor using observed indicators.
+
+For example:
+
+`adjust =~ motiv + harm + stabi`
+
+This specifies that Motivation, Harmony, and Stability measure Adjustment.
+
+The resulting coefficients are factor loadings.
+
+## 8. What does the `~~` operator mean?
+
+The `~~` operator specifies a variance or covariance.
+
+When the same variable appears on both sides, it represents a variance.
+
+For example:
+
+`motiv ~~ motiv`
+
+When two different variables appear, it represents covariance.
+
+For example:
+
+`ppsych ~~ motiv`
+
+It can also be used to fix a covariance at zero, as shown in Model 3D.
+
+## 9. What is the difference between a regression path and a factor loading?
+
+A regression path describes how one variable predicts another.
+
+For example, Adjustment predicting Achievement is a regression relationship.
+
+A factor loading describes how an observed indicator is associated with a latent factor.
+
+For example, Reading loading on Achievement is a measurement relationship.
+
+The distinction is whether the path represents prediction among variables or measurement of a construct.
+
+## 10. What is the difference between a sample covariance matrix and a model-implied covariance matrix?
+
+The sample covariance matrix is calculated directly from observed data.
+
+The model-implied covariance matrix is calculated from the estimated parameters of the proposed model.
+
+SEM examines how closely the model-implied covariance matrix reproduces the sample covariance matrix.
+
+The smaller the discrepancy, the better the model reproduces the observed relationships.
+
+## 11. Why does the `cov()` function produce a sample covariance matrix rather than a population covariance matrix?
+
+The `cov()` function calculates variances and covariances using the observations available in the dataset.
+
+The UCLA example contains 500 students.
+
+Since these students represent an illustrative sample rather than the entire population, the result is the sample covariance matrix $S$.
+
+The population covariance matrix $\Sigma$ is unknown.
+
+## 12. What is the difference between multiple regression and multivariate regression?
+
+Multiple regression predicts one outcome using several predictors.
+
+For example, Model 2 predicts Reading using Motivation and Negative Parental Psychology.
+
+Multivariate regression estimates relationships involving several outcomes simultaneously.
+
+Model 3A predicts both Reading and Arithmetic.
+
+The main distinction is the number of outcomes, not simply the number of predictors.
+
+## 13. Why are some models saturated?
+
+A model is saturated when it estimates enough parameters to reproduce the observed covariance information exactly.
+
+For example, Model 3E adds Negative Parental Psychology as a predictor of Arithmetic and becomes fully saturated.
+
+The model has zero degrees of freedom.
+
+However, this does not automatically mean it provides the best theoretical explanation.
+
+## 14. What does it mean when a model has zero degrees of freedom?
+
+Zero degrees of freedom means the model is just-identified or saturated.
+
+The model contains enough free parameters to reproduce the available covariance information.
+
+However, this also means there are no remaining restrictions to evaluate through an overall model-fit test.
+
+Therefore, a zero chi-square does not establish that the proposed relationships are correct.
+
+## 15. What does it mean when a model has negative degrees of freedom?
+
+Negative degrees of freedom indicate that the model attempts to estimate more independent parameters than the available information can support.
+
+This is a warning of under-identification.
+
+The researcher may need to fix certain parameters or revise the model before it can be estimated properly.
+
+## 16. What is the difference between the Gamma and B matrices?
+
+The $\Gamma$ matrix represents regression paths from exogenous variables to endogenous variables.
+
+The $B$ matrix represents regression paths among endogenous variables.
+
+In Model 6B, Risk predicting Adjustment belongs to $\Gamma$.
+
+Adjustment predicting Achievement belongs to $B$ because both factors are endogenous.
+
+## 17. What is a modification index?
+
+A modification index estimates how much the model chi-square might decrease if one currently fixed or omitted parameter were freely estimated.
+
+For example, the modification-index output for Model 4A suggests adding Negative Parental Psychology as a predictor of Arithmetic.
+
+The MI estimates the potential improvement in model fit, while the EPC estimates the value of the added parameter.
+
+## 18. Why should researchers not automatically follow modification-index recommendations?
+
+Modification indices focus on improving statistical fit, but they do not determine whether a relationship makes theoretical sense.
+
+For example, the largest MI in Model 4A suggests predicting Motivation from Arithmetic.
+
+This would change the direction of the original model.
+
+Adding paths only to improve fit may also lead to overfitting and relationships that fail to replicate.
+
+Therefore, theoretical reasoning should guide model revisions.
+
+## 19. What is the difference between a direct effect and an indirect effect?
+
+A direct effect is represented by a single path from a predictor to an outcome.
+
+An indirect effect occurs when the relationship passes through another variable.
+
+In Model 6B, Risk directly predicts Achievement.
+
+Risk also has a possible indirect relationship with Achievement through Adjustment.
+
+The indirect coefficient is calculated by multiplying the path coefficients along that relationship.
+
+## 20. Which paths in the structural model are theoretically most important?
+
+In Model 6A, the two central paths are Adjustment predicting Achievement and Risk predicting Achievement.
+
+These relationships address the researcher's main question about how student background characteristics are associated with academic performance.
+
+In Model 6B, Risk predicting Adjustment is also important because it creates a possible indirect relationship with Achievement.
+
+Together, these paths represent the main structural relationships proposed by the researcher.
+
+## 21. How should the fit of the measurement model be evaluated?
+
+The measurement model should be evaluated using factor loadings, residual variances, and overall fit statistics.
+
+For example, Reading and Spelling have standardized loadings of 0.941 and 0.919 on Achievement, suggesting that both are strong indicators.
+
+However, the three-factor model reports RMSEA = 0.102 and a significant chi-square.
+
+This means that strong factor loadings do not necessarily indicate good overall model fit.
+
+The researcher should consider both the individual measurement relationships and the full covariance structure.
+
+## 22. How should the fit of the structural model be evaluated?
+
+The structural model should be evaluated using several fit statistics together, including chi-square, CFI, TLI, and RMSEA.
+
+The regression coefficients should also be examined to determine whether the relationships are statistically significant and theoretically meaningful.
+
+For example, Model 6A reports CFI = 0.951 but RMSEA = 0.102.
+
+Some statistics support the model, while others suggest possible misspecification.
+
+Therefore, I would describe the model as having mixed fit rather than simply concluding that it fits well.
+
+## 23. What conclusions can be drawn from the standardized estimates?
+
+Standardized coefficients allow us to compare relationships measured on different scales.
+
+In Model 6A, Adjustment has a standardized coefficient of 0.372, while the coded Risk factor has a coefficient of 0.564.
+
+This suggests that Risk has a stronger standardized association with Achievement than Adjustment in this model.
+
+However, the interpretation depends on how the Risk factor is measured.
+
+The coefficients also describe associations rather than proven causal effects.
+
+## 24. What limitations should be considered when interpreting this SEM?
+
+One limitation is that the UCLA dataset is fictional and intended for teaching, so its results should not be generalized to actual students.
+
+The seminar also assumes that the variables are continuous and normally distributed.
+
+Another limitation is that the measurement model depends on whether the selected indicators adequately represent the latent constructs.
+
+The study's regression paths do not establish causation.
+
+In addition, Models 6A and 6B show that different structural specifications can produce identical overall fit.
+
+Finally, modification indices can suggest changes that improve fit in the current sample but may not generalize to another dataset.
+
+These limitations should be considered before drawing strong conclusions about the proposed relationships.
+
+# Additional UCLA Seminar Practice Exercises
+
+## Exercise 1: Does `cov(dat)` return the population covariance matrix?
+
+False.
+
+The function calculates the sample covariance matrix using the available observations.
+
+The population covariance matrix is unknown.
+
+## Exercise 2: Is the model-implied covariance matrix reproduced from model parameters?
+
+True.
+
+The model-implied covariance matrix, $\Sigma(\theta)$, is calculated using the parameters specified in the model.
+
+These include regression coefficients, factor loadings, and variance parameters.
+
+## Exercise 3: If an observed indicator is measured by an endogenous factor, is it an x-side indicator?
+
+False.
+
+The seminar explains that indicators associated with an endogenous factor are y-side indicators in LISREL notation.
+
+Indicators associated with an exogenous factor are x-side indicators.
+
+## Exercise 4: In Model 1A, is there one endogenous outcome and one exogenous predictor?
+
+True.
+
+Reading is the endogenous outcome, and Motivation is the exogenous predictor.
+
+## Exercise 5: In Model 1A, does $y_1$ mean there is only one student in the sample?
+
+False.
+
+The subscript indicates the first endogenous variable, not the number of observations.
+
+The dataset still contains 500 students.
+
+## Exercise 6: Why is the intercept of Motivation approximately zero?
+
+The UCLA instructor explains that the variables were centered around zero.
+
+Therefore, the intercept is approximately zero in this example.
+
+This is a characteristic of the dataset rather than a requirement of regression.
+
+## Exercise 7: Do least squares and maximum likelihood produce the same regression coefficient in Model 1?
+
+True.
+
+Both methods produce a coefficient of approximately 0.530.
+
+However, their estimated residual variances differ slightly because the methods use different denominators.
+
+## Exercise 8: Why does Model 1B report five free parameters?
+
+The model includes the Reading intercept, the regression coefficient, the Motivation variance, and the Reading residual variance.
+
+The seminar also explains that the exogenous variable's mean is included in the parameter count for this specification.
+
+This gives five free parameters.
+
+## Exercise 9: Does adding another predictor change the number of endogenous variables in multiple regression?
+
+No.
+
+Multiple regression can include several predictors but still has only one outcome.
+
+In Model 2, both Motivation and Negative Parental Psychology predict Reading.
+
+## Exercise 10: Is the size of the residual vector determined by the number of observations?
+
+False.
+
+In the seminar's matrix notation, the residual vector contains one component for each endogenous variable.
+
+It is not indexed by the number of students.
+
+## Exercise 11: Is the Gamma matrix always square?
+
+False.
+
+The number of rows depends on the number of endogenous variables, while the number of columns depends on the number of exogenous variables.
+
+The matrix is only square when these numbers happen to be equal.
+
+## Exercise 12: Does multivariate regression always require several exogenous predictors?
+
+False.
+
+Multivariate regression requires more than one endogenous variable.
+
+It can still have only one exogenous predictor.
+
+The distinction is the number of outcomes rather than the number of predictors.
+
+## Exercise 13: Why do Models 3A and 3D produce different Reading coefficients?
+
+Model 3A estimates a residual covariance between Reading and Arithmetic.
+
+Model 3D fixes that covariance at zero.
+
+Removing the covariance changes the restrictions placed on the simultaneous regression model.
+
+The Reading coefficients in Model 3D then match the coefficients from the separate ordinary regressions.
+
+## Exercise 14: Is the residual variance of Arithmetic the same as its total variance?
+
+False.
+
+The residual variance represents variation that remains after accounting for the predictors.
+
+The total variance includes both explained and unexplained variation.
+
+Therefore, the two values are not the same.
+
+## Exercise 15: Are over-identified models useful because they have testable restrictions?
+
+True.
+
+An over-identified model has positive degrees of freedom.
+
+This allows researchers to evaluate whether the specified restrictions are consistent with the observed covariance structure.
+
+## Exercise 16: Are simple and multiple regression models saturated in the seminar examples?
+
+True.
+
+Models 1 and 2 have zero degrees of freedom.
+
+They can reproduce the available covariance information, so their overall lack of fit cannot be tested.
+
+## Exercise 17: Does a zero B matrix mean there are no structural regression relationships?
+
+False.
+
+A zero $B$ matrix means there are no regression paths among endogenous variables.
+
+However, exogenous variables may still predict endogenous variables through the $\Gamma$ matrix.
+
+## Exercise 18: Does each modification index test one parameter at a time?
+
+True.
+
+Each modification index estimates the effect of freeing one parameter.
+
+This corresponds to a one-degree-of-freedom comparison.
+
+## Exercise 19: Must two saturated models have exactly the same parameter estimates?
+
+False.
+
+Two saturated models can represent the same covariance structure using different parameterizations.
+
+Their overall fit can be identical even when their individual parameter estimates differ.
+
+## Exercise 20: Why are there no modification-index suggestions remaining for Model 4B?
+
+Model 4B is saturated.
+
+Because its degrees of freedom are zero, there are no remaining restrictions to relax to improve the covariance fit.
+
+This is why the modification-index output does not suggest additional improvements in the same way as Model 4A.
+
+## Exercise 21: Should researchers always follow modification-index recommendations?
+
+False.
+
+Modification indices may suggest relationships that improve statistical fit but do not make theoretical sense.
+
+The researcher should consider the original model assumptions and the possibility of overfitting.
+
+## Exercise 22: Are residual covariances evaluated using sample estimates?
+
+True.
+
+The seminar explains that residual covariance is evaluated through the difference between the sample covariance matrix and the estimated model-implied covariance matrix.
+
+The closer this difference is to zero, the better the model reproduces the observed covariance information.
+
+## Exercise 23: Do exogenous latent variables have residual variances in the same way as endogenous latent variables?
+
+False.
+
+An exogenous latent variable is not predicted by another variable in the structural model.
+
+Therefore, its variance is not a structural residual variance.
+
+However, the observed indicators measuring the factor can still have their own residual variances.
+
+## Exercise 24: Can an endogenous latent variable have a residual variance?
+
+True.
+
+An endogenous latent variable is predicted by other variables, so part of its variation may remain unexplained.
+
+For example, Achievement has a residual variance in Model 6A because Adjustment and Risk do not explain all of its variation.
+
+## Exercise 25: Does fixing one factor loading to 1 help identify a measurement model?
+
+True.
+
+Fixing one loading to 1 establishes the scale of the latent factor.
+
+The seminar calls this the marker method.
+
+It is one of the methods used to identify a factor model.
+
+## Exercise 26: Does the negative loading of Negative Parental Psychology mean the Risk factor is incorrectly estimated?
+
+Not necessarily.
+
+The negative loading shows that Negative Parental Psychology is inversely related to the estimated factor.
+
+The important issue is how the researcher interprets and labels that factor.
+
+In this example, higher factor scores correspond to higher Verbal IQ and Socioeconomic Status but lower Negative Parental Psychology.
+
+## Exercise 27: Does Model 6A contain structural regression paths even though B equals zero?
+
+True.
+
+Model 6A has no paths among endogenous latent variables.
+
+However, Adjustment and Risk still predict Achievement.
+
+Those relationships are represented by the $\Gamma$ matrix.
+
+## Exercise 28: Are the diagonal entries of B equal to zero in the seminar models?
+
+True.
+
+The diagonal entries represent a variable predicting itself.
+
+The seminar sets these entries to zero.
+
+## Exercise 29: Can lavaan specify a relationship between a latent predictor and an observed outcome?
+
+True.
+
+The seminar demonstrates that `lavaan` can specify relationships involving latent predictors and observed outcomes.
+
+However, in the traditional LISREL framework, such relationships require attention to how the measurement and structural models are represented.
+
+## Exercise 30: Does structural regression combine measurement and structural relationships?
+
+True.
+
+Structural regression includes latent factors defined by observed indicators and regression paths among those factors.
+
+For example, Model 6A defines Adjustment, Risk, and Achievement through their indicators and then estimates how Adjustment and Risk predict Achievement.
+
+# Summary of Important Lessons
+
+After working through the UCLA seminar, I have a clearer understanding of how SEM builds on methods I have already learned.
+
+One of the most useful parts of the seminar was seeing how simple regression, multiple regression, multivariate regression, and path analysis fit within the same framework. Although the models become more complicated, they still rely on the relationships among predictors, outcomes, and residuals.
+
+The comparison between Models 3A and 3D was particularly helpful. Both models use the same observed variables and regression paths, but Model 3D fixes the residual covariance between Reading and Arithmetic at zero. The chi-square increases from 6.796 to 234.960, showing that this covariance restriction has a substantial effect on model fit. This helped me understand why model specification matters, even when the change seems small.
+
+I also found the discussion of degrees of freedom useful. Before this seminar, I might have assumed that a chi-square of zero always indicated an excellent model. However, the saturated models show that a perfect covariance fit can simply result from estimating enough parameters. A model with zero degrees of freedom cannot be evaluated for overall lack of fit.
+
+Another important lesson is that the fit statistics need to be considered together. For Model 4A, CFI and TLI are very high, but the chi-square is significant and RMSEA is somewhat higher than the preferred range. For Model 6A, CFI is 0.951, but RMSEA reaches 0.102. These examples show why looking at only one fit statistic can lead to an incomplete conclusion.
+
+The measurement model also helped me understand why factor loadings must be interpreted carefully. The Risk factor is a good example because Negative Parental Psychology has a negative loading, while Verbal IQ and Socioeconomic Status have positive loadings. Therefore, interpreting the structural coefficient based only on the factor name could lead to a misleading conclusion.
+
+Finally, Models 6A and 6B show that different structural specifications can produce identical overall fit. In Model 6A, Adjustment and Risk are correlated exogenous factors. In Model 6B, Risk predicts Adjustment directly. The two models still reproduce the same covariance structure.
+
+This means statistical fit alone cannot establish which theoretical explanation is correct.
+
+Overall, the seminar helped me understand how to specify SEM models in `lavaan`, interpret factor loadings and regression coefficients, distinguish direct and indirect relationships, and evaluate model fit more carefully. These notes will be useful when I work with CFA or SEM in future research projects.
+
+# References
+
+UCLA Statistical Methods and Data Analytics. n.d. “Introduction to Structural Equation Modeling (SEM) in R with lavaan.” Accessed October 4, 2026. https://stats.oarc.ucla.edu/r/seminars/rsem/.
+
+UCLA Statistical Methods and Data Analytics. 2021. “SEM Seminar R Code.” https://stats.oarc.ucla.edu/wp-content/uploads/2021/02/sem.r.
+
+# Appendix: Publication Links
+
+- [GitHub Repository](PASTE_YOUR_GITHUB_REPOSITORY_LINK_HERE)
+- [GitHub Pages Website](PASTE_YOUR_GITHUB_PAGES_LINK_HERE)
